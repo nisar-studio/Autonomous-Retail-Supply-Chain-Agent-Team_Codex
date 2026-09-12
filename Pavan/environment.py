@@ -1,25 +1,25 @@
+from typing import Any, Dict, Tuple
+
+
 class Environment:
     """
-    Simulated environment for executing supply-chain actions.
+    Simulated retail supply-chain environment.
+
+    State contains:
+        inventory  -> {(item, location): quantity}
+        locations  -> {item: latest operational location}
+        balances   -> optional balance information
+        allocations -> {(item, location): allocated quantity}
 
     Supported actions:
-    - Purchase
-    - Transfer
-    - Reroute
-
-    The environment also provides:
-    - Explicit item -> location mapping
-    - Inventory management
-    - Execution history
-    - Evaluation metrics
-
-    Location policy:
-    - Locations must be explicitly provided.
-    - No default or guessed location is created.
+        purchase
+        transfer
+        reroute
+        allocate
     """
 
     def __init__(self):
-        self.state = {
+        self.state: Dict[str, Any] = {
             "inventory": {},
             "locations": {},
             "balances": {},
@@ -28,136 +28,207 @@ class Environment:
 
         self.history = []
 
-    # ==============================================================
+    # =========================================================
+    # STATE
+    # =========================================================
+
+    def get_state(self) -> Dict[str, Any]:
+        return self.state
+
+    # =========================================================
     # LOCATION MANAGEMENT
-    # ==============================================================
+    # =========================================================
 
-    def set_item_location(self, item, location):
-        """
-        Explicitly associate an item with a location.
-
-        Example:
-            env.set_item_location("laptop", "warehouse_1")
-        """
-
-        if not item:
-            raise ValueError("Item is required.")
-
-        if not location:
-            raise ValueError("Location is required.")
-
+    def set_item_location(
+        self,
+        item: str,
+        location: str
+    ) -> None:
         self.state["locations"][item] = location
 
-        return {
-            "status": "success",
-            "item": item,
-            "location": location,
-        }
-
-    def get_item_location(self, item):
-        """
-        Return the explicitly registered location for an item.
-
-        Returns None if no location has been registered.
-        """
-
+    def get_item_location(
+        self,
+        item: str
+    ):
         return self.state["locations"].get(item)
 
-    def has_item_location(self, item):
-        """
-        Check whether an explicit location exists for an item.
-        """
-
+    def has_item_location(
+        self,
+        item: str
+    ) -> bool:
         return item in self.state["locations"]
 
-    def get_all_item_locations(self):
-        """
-        Return a copy of the complete item -> location mapping.
-        """
-
+    def get_all_item_locations(
+        self
+    ) -> Dict[str, str]:
         return self.state["locations"].copy()
 
-    # ==============================================================
-    # EVALUATION METRICS
-    # ==============================================================
+    # =========================================================
+    # INVENTORY HELPERS
+    # =========================================================
 
-    def _execution_metrics(self, action, quantity):
-        """
-        Deterministic simulation metrics.
+    def _inventory_key(
+        self,
+        item: str,
+        location: str
+    ) -> Tuple[str, str]:
+        return (item, location)
 
-        These values are for the hackathon simulation environment.
-        They are not real-world logistics calculations.
+    def _get_inventory(
+        self,
+        item: str,
+        location: str
+    ) -> float:
+        key = self._inventory_key(
+            item,
+            location
+        )
 
-        Metrics:
-        - delivered_quantity
-        - delivery_time
-        - total_cost
-        - carbon_emission
-        """
-
-        if action == "purchase":
-            return {
-                "delivered_quantity": quantity,
-                "delivery_time": 24.0,
-                "total_cost": round(float(quantity * 100), 2),
-                "carbon_emission": round(float(quantity * 0.5), 2),
-            }
-
-        if action == "transfer":
-            return {
-                "delivered_quantity": quantity,
-                "delivery_time": 4.0,
-                "total_cost": round(float(quantity * 20), 2),
-                "carbon_emission": round(float(quantity * 0.2), 2),
-            }
-
-        if action == "reroute":
-            return {
-                "delivered_quantity": quantity,
-                "delivery_time": 6.0,
-                "total_cost": round(float(quantity * 30), 2),
-                "carbon_emission": round(float(quantity * 0.3), 2),
-            }
-
-        return {
-            "delivered_quantity": 0,
-            "delivery_time": 0.0,
-            "total_cost": 0.0,
-            "carbon_emission": 0.0,
-        }
-
-    # ==============================================================
-    # PURCHASE
-    # ==============================================================
-
-    def purchase(self, item, quantity, location):
-        """
-        Purchase an item and add it to inventory at the given location.
-        """
-
-        if quantity <= 0:
-            return self._failure(
-                "Quantity must be greater than 0."
-            )
-
-        if not location:
-            return self._failure(
-                "Location is required for purchase."
-            )
-
-        current_quantity = self.state["inventory"].get(
-            (item, location),
+        return self.state["inventory"].get(
+            key,
             0
         )
 
-        self.state["inventory"][(item, location)] = (
+    def _set_inventory(
+        self,
+        item: str,
+        location: str,
+        quantity: float
+    ) -> None:
+
+        key = self._inventory_key(
+            item,
+            location
+        )
+
+        if quantity <= 0:
+            self.state["inventory"].pop(
+                key,
+                None
+            )
+        else:
+            self.state["inventory"][key] = quantity
+
+    def _add_inventory(
+        self,
+        item: str,
+        location: str,
+        quantity: float
+    ) -> None:
+
+        current_quantity = self._get_inventory(
+            item,
+            location
+        )
+
+        self._set_inventory(
+            item,
+            location,
             current_quantity + quantity
         )
 
-        # Record the explicitly supplied location.
+    # =========================================================
+    # EXECUTION METRICS
+    # =========================================================
+
+    def _execution_metrics(
+        self,
+        action: str,
+        quantity: float
+    ) -> Dict[str, float]:
+
+        if action == "purchase":
+
+            delivery_time = 24.0
+            total_cost = 100.0 * quantity
+            carbon_emission = 0.5 * quantity
+
+        elif action == "transfer":
+
+            delivery_time = 4.0
+            total_cost = 20.0 * quantity
+            carbon_emission = 0.2 * quantity
+
+        elif action == "reroute":
+
+            delivery_time = 6.0
+            total_cost = 30.0 * quantity
+            carbon_emission = 0.3 * quantity
+
+        else:
+
+            delivery_time = 0.0
+            total_cost = 0.0
+            carbon_emission = 0.0
+
+        return {
+            "delivered_quantity": quantity,
+            "delivery_time": delivery_time,
+            "total_cost": round(
+                total_cost,
+                2
+            ),
+            "carbon_emission": round(
+                carbon_emission,
+                2
+            ),
+        }
+
+    # =========================================================
+    # PURCHASE
+    # =========================================================
+
+    def purchase(
+        self,
+        item: str,
+        quantity: float,
+        location: str,
+        supplier_id: str = None
+    ) -> Dict[str, Any]:
+
+        if not item:
+
+            return {
+                "action": "purchase",
+                "status": "failure",
+                "error": "Item is required.",
+            }
+
+        if not location:
+
+            return {
+                "action": "purchase",
+                "status": "failure",
+                "error": "Location is required.",
+            }
+
+        if quantity <= 0:
+
+            return {
+                "action": "purchase",
+                "status": "failure",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
+            }
+
+        # Add purchased inventory
+        self._add_inventory(
+            item,
+            location,
+            quantity
+        )
+
+        # Update operational location
         self.set_item_location(
             item,
             location
+        )
+
+        # Calculate execution metrics
+        metrics = self._execution_metrics(
+            "purchase",
+            quantity
         )
 
         result = {
@@ -166,87 +237,118 @@ class Environment:
             "item": item,
             "quantity": quantity,
             "location": location,
-            **self._execution_metrics(
-                "purchase",
-                quantity
-            ),
+            "supplier_id": supplier_id,
+            **metrics,
         }
 
         self.history.append(result)
 
         return result
 
-    # ==============================================================
+    # =========================================================
     # TRANSFER
-    # ==============================================================
+    # =========================================================
 
     def transfer(
         self,
-        item,
-        quantity,
-        source,
-        destination
-    ):
-        """
-        Transfer inventory from source to destination.
-        """
+        item: str,
+        quantity: float,
+        source: str,
+        destination: str
+    ) -> Dict[str, Any]:
 
-        if quantity <= 0:
-            return self._failure(
-                "Quantity must be greater than 0."
-            )
+        if not item:
+
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": "Item is required.",
+            }
 
         if not source:
-            return self._failure(
-                "Source location is required."
-            )
+
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": (
+                    "Source location is required."
+                ),
+            }
 
         if not destination:
-            return self._failure(
-                "Destination location is required."
-            )
 
-        source_key = (
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": (
+                    "Destination location is required."
+                ),
+            }
+
+        if source == destination:
+
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": (
+                    "Source and destination "
+                    "cannot be the same."
+                ),
+            }
+
+        if quantity <= 0:
+
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
+            }
+
+        # Check source inventory
+        available = self._get_inventory(
             item,
             source
         )
 
-        destination_key = (
-            item,
-            destination
-        )
-
-        available = self.state["inventory"].get(
-            source_key,
-            0
-        )
-
         if available < quantity:
-            return self._failure(
-                f"Not enough {item} at {source}. "
-                f"Available: {available}, "
-                f"requested: {quantity}."
-            )
 
-        # Remove from source.
-        self.state["inventory"][source_key] = (
+            return {
+                "action": "transfer",
+                "status": "failure",
+                "error": (
+                    f"Insufficient inventory for "
+                    f"{item} at {source}. "
+                    f"Available: {available}, "
+                    f"requested: {quantity}."
+                ),
+            }
+
+        # Remove inventory from source
+        self._set_inventory(
+            item,
+            source,
             available - quantity
         )
 
-        # Add to destination.
-        destination_quantity = self.state["inventory"].get(
-            destination_key,
-            0
+        # Add inventory to destination
+        self._add_inventory(
+            item,
+            destination,
+            quantity
         )
 
-        self.state["inventory"][destination_key] = (
-            destination_quantity + quantity
-        )
-
-        # Destination becomes current item location.
+        # Update latest operational location
         self.set_item_location(
             item,
             destination
+        )
+
+        # Calculate metrics
+        metrics = self._execution_metrics(
+            "transfer",
+            quantity
         )
 
         result = {
@@ -256,87 +358,133 @@ class Environment:
             "quantity": quantity,
             "source": source,
             "destination": destination,
-            **self._execution_metrics(
-                "transfer",
-                quantity
-            ),
+            **metrics,
         }
 
         self.history.append(result)
 
         return result
 
-    # ==============================================================
+    # =========================================================
     # REROUTE
-    # ==============================================================
+    # =========================================================
 
     def reroute(
         self,
-        item,
-        quantity,
-        from_location,
-        to_location
-    ):
-        """
-        Reroute inventory from one location to another.
-        """
+        item: str,
+        quantity: float,
+        source: str,
+        destination: str
+    ) -> Dict[str, Any]:
+
+        if not item:
+
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": "Item is required.",
+            }
+
+        if not source:
+
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": (
+                    "Source location is required."
+                ),
+            }
+
+        if not destination:
+
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": (
+                    "Destination location is required."
+                ),
+            }
+
+        if source == destination:
+
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": (
+                    "Source and destination "
+                    "cannot be the same."
+                ),
+            }
 
         if quantity <= 0:
-            return self._failure(
-                "Quantity must be greater than 0."
-            )
 
-        if not from_location:
-            return self._failure(
-                "Source location is required for reroute."
-            )
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
+            }
 
-        if not to_location:
-            return self._failure(
-                "Destination location is required for reroute."
-            )
+        # -----------------------------------------------------
+        # IMPORTANT:
+        # Read inventory specifically from the source.
+        # -----------------------------------------------------
 
-        source_key = (
+        available = self._get_inventory(
             item,
-            from_location
-        )
-
-        destination_key = (
-            item,
-            to_location
-        )
-
-        available = self.state["inventory"].get(
-            source_key,
-            0
+            source
         )
 
         if available < quantity:
-            return self._failure(
-                f"Not enough {item} at {from_location}. "
-                f"Available: {available}, "
-                f"requested: {quantity}."
-            )
 
-        # Remove from source.
-        self.state["inventory"][source_key] = (
+            return {
+                "action": "reroute",
+                "status": "failure",
+                "error": (
+                    f"Insufficient inventory for "
+                    f"{item} at {source}. "
+                    f"Available: {available}, "
+                    f"requested: {quantity}."
+                ),
+            }
+
+        # -----------------------------------------------------
+        # Remove quantity from source
+        # -----------------------------------------------------
+
+        self._set_inventory(
+            item,
+            source,
             available - quantity
         )
 
-        # Add to destination.
-        destination_quantity = self.state["inventory"].get(
-            destination_key,
-            0
+        # -----------------------------------------------------
+        # Add quantity to destination
+        # -----------------------------------------------------
+
+        self._add_inventory(
+            item,
+            destination,
+            quantity
         )
 
-        self.state["inventory"][destination_key] = (
-            destination_quantity + quantity
-        )
+        # -----------------------------------------------------
+        # Update latest operational location
+        # -----------------------------------------------------
 
-        # Update current item location.
         self.set_item_location(
             item,
-            to_location
+            destination
+        )
+
+        # -----------------------------------------------------
+        # Calculate reroute metrics
+        # -----------------------------------------------------
+
+        metrics = self._execution_metrics(
+            "reroute",
+            quantity
         )
 
         result = {
@@ -344,59 +492,126 @@ class Environment:
             "status": "success",
             "item": item,
             "quantity": quantity,
-            "source": from_location,
-            "destination": to_location,
-            **self._execution_metrics(
-                "reroute",
-                quantity
-            ),
+            "source": source,
+            "destination": destination,
+            **metrics,
         }
 
         self.history.append(result)
 
         return result
 
-    # ==============================================================
-    # STATE
-    # ==============================================================
+    # =========================================================
+    # ALLOCATION
+    # =========================================================
 
-    def get_state(self):
-        """
-        Return the current environment state.
-        """
+    def allocate(
+        self,
+        item: str,
+        quantity: float,
+        location: str
+    ) -> Dict[str, Any]:
 
-        return {
-            "inventory": self.state["inventory"].copy(),
-            "locations": self.state["locations"].copy(),
-            "balances": self.state["balances"].copy(),
-            "allocations": self.state["allocations"].copy(),
-        }
+        if not item:
 
-    # ==============================================================
-    # HISTORY
-    # ==============================================================
+            return {
+                "action": "allocation",
+                "status": "failure",
+                "error": "Item is required.",
+            }
 
-    def get_history(self):
-        """
-        Return a copy of the execution history.
-        """
+        if not location:
 
-        return self.history.copy()
+            return {
+                "action": "allocation",
+                "status": "failure",
+                "error": "Location is required.",
+            }
 
-    # ==============================================================
-    # FAILURE HANDLING
-    # ==============================================================
+        if quantity <= 0:
 
-    def _failure(self, message):
-        """
-        Create and record a failed operation.
-        """
+            return {
+                "action": "allocation",
+                "status": "failure",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
+            }
+
+        # Current inventory at location
+        available_inventory = self._get_inventory(
+            item,
+            location
+        )
+
+        allocation_key = (
+            item,
+            location
+        )
+
+        # Already allocated quantity
+        already_allocated = self.state[
+            "allocations"
+        ].get(
+            allocation_key,
+            0
+        )
+
+        # Remaining unallocated stock
+        available_to_allocate = (
+            available_inventory
+            - already_allocated
+        )
+
+        if available_to_allocate < quantity:
+
+            return {
+                "action": "allocation",
+                "status": "failure",
+                "error": (
+                    f"Insufficient unallocated "
+                    f"inventory for {item} at "
+                    f"{location}. "
+                    f"Available: "
+                    f"{available_to_allocate}, "
+                    f"requested: {quantity}."
+                ),
+            }
+
+        total_allocated = (
+            already_allocated
+            + quantity
+        )
+
+        # Reserve inventory
+        self.state[
+            "allocations"
+        ][allocation_key] = total_allocated
+
+        # Update item location
+        self.set_item_location(
+            item,
+            location
+        )
 
         result = {
-            "status": "failure",
-            "error": message,
+            "action": "allocation",
+            "status": "success",
+            "item": item,
+            "quantity": quantity,
+            "location": location,
+            "allocated_quantity": quantity,
+            "total_allocated": total_allocated,
         }
 
         self.history.append(result)
 
         return result
+
+    # =========================================================
+    # HISTORY
+    # =========================================================
+
+    def get_history(self):
+
+        return self.history.copy()
