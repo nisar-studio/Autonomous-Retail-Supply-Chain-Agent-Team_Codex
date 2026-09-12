@@ -125,3 +125,32 @@ def test_evaluation_contains_metrics():
     assert output["metrics"]["total_cost"] == 12000
     assert output["metrics"]["delivery_time"] == "2026-09-15T16:00:00"
     assert output["metrics"]["carbon_emission"] == 50
+
+def test_evaluation_preserves_action_id():
+    result = {
+        "action_id": "A001",
+        "goal": {
+            "required_quantity": 100,
+            "deadline": 4,
+            "budget": 15000
+        },
+        "expected": {
+            "required_quantity": 100,
+            "deadline": 4,
+            "max_cost": 15000
+        },
+        "actual": {
+            "delivered_quantity": 100,
+            "delivery_time": 2.5,
+            "total_cost": 12500,
+            "supplier_available": True,
+            "shipment_delayed": False,
+            "inventory_available": True,
+            "tool_error": False,
+            "feasible": True
+        }
+    }
+
+    output = evaluate_result(result)
+
+    assert output["action_id"] == "A001"

@@ -13,13 +13,16 @@ def evaluate_result(result: dict) -> dict:
     """
     Perform complete evaluation of an execution result.
 
-    Returns verification, metrics, robustness and
-    an overall recommendation.
+    Returns verification, metrics, robustness,
+    action_id and an overall recommendation.
     """
 
     verification = verify_result(result)
     metrics = calculate_metrics(result)
     robustness = check_robustness(result)
+
+    # Preserve action_id for the controller/replanning layer.
+    action_id = result.get("action_id") if isinstance(result, dict) else None
 
     # Overall decision
     if not verification["verified"]:
@@ -30,6 +33,7 @@ def evaluate_result(result: dict) -> dict:
         recommendation = "CONTINUE"
 
     return {
+        "action_id": action_id,
         "verified": verification["verified"],
         "status": (
             "PASS"
