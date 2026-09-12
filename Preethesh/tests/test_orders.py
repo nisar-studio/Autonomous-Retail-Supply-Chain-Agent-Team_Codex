@@ -56,3 +56,24 @@ def test_duplicate_order_is_rejected():
         assert False, "Expected duplicate order to raise ValueError"
     except ValueError:
         pass
+def test_execute_get_order():
+    orders = OrderTool()
+
+    order = Order(
+        order_id="ORD001",
+        item_id="SKU001",
+        quantity=50,
+        supplier_id="SUP001",
+    )
+
+    orders.create_order(order)
+
+    result = orders.execute(
+        operation="get",
+        order_id="ORD001",
+    )
+
+    assert result is not None
+    assert result.order_id == "ORD001"
+    assert result.item_id == "SKU001"
+    assert result.quantity == 50

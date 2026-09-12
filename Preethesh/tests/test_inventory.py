@@ -63,3 +63,19 @@ def test_update_quantity():
     updated = inventory.update_quantity("SKU001", 8)
 
     assert updated.quantity == 8
+def test_execute_low_stock():
+    inventory = InventoryTool()
+
+    inventory.add_item(
+        InventoryItem(
+            item_id="SKU001",
+            name="Milk",
+            quantity=5,
+            reorder_level=10,
+        )
+    )
+
+    result = inventory.execute(operation="low_stock")
+
+    assert len(result) == 1
+    assert result[0].item_id == "SKU001"
