@@ -4,7 +4,11 @@ from __future__ import annotations
 from .contracts import CurrentState, Disruption, RecoveryGoal, RecoveryPlan
 
 
-def create_recovery_goal(state: CurrentState, disruption: Disruption) -> RecoveryGoal:
+def create_recovery_goal(
+    state: CurrentState,
+    disruption: Disruption,
+    location: str | None = None,
+) -> RecoveryGoal:
     constraints = dict(disruption.metrics)
     constraints["state_snapshot"] = state.snapshot_id
     return RecoveryGoal(
@@ -13,6 +17,7 @@ def create_recovery_goal(state: CurrentState, disruption: Disruption) -> Recover
         disruption.affected_ids,
         disruption.disruption_type,
         constraints,
+        location,
     )
 
 

@@ -41,11 +41,17 @@ class DetectionAndPlanningTests(unittest.TestCase):
         self.assertEqual(create_recovery_plan(goal, SHORTAGE).goal.location, "store-1")
 
 class ControllerTests(unittest.TestCase):
-    def build(self, actions, executions, verifications, retries=2):
-        return RecoveryController(Monitor(FixedSource(SHORTAGE)), ScriptedSelector(actions), ScriptedExecutor(executions), ScriptedVerifier(verifications), retries)
+    def build(self, actions, executions, verifications, retries=2, recovery_location=None):
+        return RecoveryController(Monitor(FixedSource(SHORTAGE)), ScriptedSelector(actions), ScriptedExecutor(executions), ScriptedVerifier(verifications), retries, recovery_location)
     def test_successful_recovery_workflow(self):
         outcome = self.build([action("a1")], [ExecutionResult(True, "executed")], [VerificationResult(True, "verified")]).recover()
         self.assertEqual((outcome.status, outcome.attempts), (OutcomeStatus.RECOVERED, 1))
+    def test_controller_generated_goal_uses_injected_recovery_location(self):
+        outcome = self.build(
+            [action("a1")], [ExecutionResult(True, "executed")],
+            [VerificationResult(True, "verified")], recovery_location="store-1",
+        ).recover()
+        self.assertEqual(outcome.goal.location, "store-1")
     def test_execution_failure_causes_replanning(self):
         outcome = self.build([action("a1"), action("a2")], [ExecutionResult(False, "failed"), ExecutionResult(True, "executed")], [VerificationResult(True, "verified")], 1).recover()
         self.assertEqual((outcome.status, outcome.attempts), (OutcomeStatus.RECOVERED, 2))

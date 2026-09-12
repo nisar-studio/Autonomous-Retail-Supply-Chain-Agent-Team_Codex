@@ -25,6 +25,7 @@ class RecoveryController:
         executor: ActionExecutor,
         verifier: OutcomeVerifier,
         max_replanning_attempts: int = 2,
+        recovery_location: str | None = None,
     ) -> None:
         if max_replanning_attempts < 0:
             raise ValueError("max_replanning_attempts must be non-negative")
@@ -33,6 +34,7 @@ class RecoveryController:
         self._executor = executor
         self._verifier = verifier
         self._max_replanning_attempts = max_replanning_attempts
+        self._recovery_location = recovery_location
 
     def recover(self) -> ControllerOutcome:
         """Recover the highest-priority active disruption within the retry bound."""
@@ -57,7 +59,7 @@ class RecoveryController:
                 f"Prioritized {disruption.disruption_type.value}; {len(disruptions) - 1} other disruption(s) remain queued.",
                 state_snapshot_id=state.snapshot_id, disruption=disruption,
             )
-            goal = create_recovery_goal(state, disruption)
+            goal = create_recovery_goal(state, disruption, self._recovery_location)
             plan = create_recovery_plan(goal, state)
             context = self._record(
                 context, attempt, RecoveryStage.PLANNED,
