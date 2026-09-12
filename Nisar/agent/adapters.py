@@ -11,6 +11,18 @@ class AlternativeSelector(Protocol):
     def select_action(self, goal: RecoveryGoal, plan: RecoveryPlan, state: CurrentState, excluded_action_ids: Sequence[str]) -> SelectedAction | None: ...
 
 
+class RawPreetheshSelector(Protocol):
+    """Preethesh's selector before conversion to Nisar's action contract."""
+
+    def select_action(
+        self,
+        goal: RecoveryGoal,
+        plan: RecoveryPlan,
+        state: CurrentState,
+        excluded_action_ids: Sequence[str],
+    ) -> Mapping[str, object] | None: ...
+
+
 class ActionExecutor(Protocol):
     """Pavan: return execution status and updated_state when execution changes it."""
     def execute(self, action: SelectedAction, state: CurrentState) -> ExecutionResult: ...
@@ -139,6 +151,32 @@ class PreetheshActionAdapter:
             operation=_required_text(selected_action, "operation"),
             parameters=dict(parameters),
         )
+
+
+class PreetheshSelectorAdapter:
+    """Adapts Preethesh's raw selector to Nisar's ``AlternativeSelector`` contract."""
+
+    def __init__(
+        self,
+        selector: RawPreetheshSelector,
+        action_adapter: PreetheshActionAdapter | None = None,
+    ) -> None:
+        self._selector = selector
+        self._action_adapter = action_adapter or PreetheshActionAdapter()
+
+    def select_action(
+        self,
+        goal: RecoveryGoal,
+        plan: RecoveryPlan,
+        state: CurrentState,
+        excluded_action_ids: Sequence[str],
+    ) -> SelectedAction | None:
+        raw_action = self._selector.select_action(
+            goal, plan, state, excluded_action_ids
+        )
+        if raw_action is None:
+            return None
+        return self._action_adapter.from_selected_action(raw_action)
 
 
 class PavanExecutorAdapter:
