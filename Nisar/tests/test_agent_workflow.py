@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import unittest
-from agent.contracts import CurrentState, DemandLevel, DisruptionType, ExecutionResult, InventoryLevel, OutcomeStatus, SelectedAction, Shipment, VerificationResult
+from agent.contracts import CurrentState, DemandLevel, DisruptionType, ExecutionResult, InventoryLevel, OutcomeStatus, RecoveryGoal, SelectedAction, Shipment, VerificationResult
 from agent.controller import RecoveryController
 from agent.disruption_detector import detect_disruptions
 from agent.monitor import Monitor
-from agent.planner import create_recovery_goal
+from agent.planner import create_recovery_goal, create_recovery_plan
 
 HEALTHY = CurrentState(inventory=(InventoryLevel("SKU-1", 10, 10),), shipments=(Shipment("SHIP-1", "SKU-1", 1, 1),), demand=(DemandLevel("SKU-1", 10, 10),), snapshot_id="healthy")
 SHORTAGE = CurrentState(inventory=(InventoryLevel("SKU-1", 3, 10),), snapshot_id="shortage")
@@ -32,6 +32,13 @@ class DetectionAndPlanningTests(unittest.TestCase):
     def test_recovery_goal_created(self):
         goal = create_recovery_goal(SHORTAGE, detect_disruptions(SHORTAGE)[0])
         self.assertEqual((goal.disruption_type, goal.affected_ids), (DisruptionType.INVENTORY_SHORTAGE, ("SKU-1",)))
+
+    def test_recovery_goal_location_is_preserved_in_plan(self):
+        goal = RecoveryGoal(
+            "goal-1", "Restore service.", ("SKU-1",),
+            DisruptionType.INVENTORY_SHORTAGE, location="store-1",
+        )
+        self.assertEqual(create_recovery_plan(goal, SHORTAGE).goal.location, "store-1")
 
 class ControllerTests(unittest.TestCase):
     def build(self, actions, executions, verifications, retries=2):

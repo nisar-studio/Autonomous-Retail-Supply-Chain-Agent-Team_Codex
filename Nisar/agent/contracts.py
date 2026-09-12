@@ -81,6 +81,7 @@ class RecoveryGoal:
     affected_ids: Tuple[str, ...]
     disruption_type: DisruptionType
     constraints: Mapping[str, int | str] = field(default_factory=dict)
+    location: str | None = None
 
 
 @dataclass(frozen=True)
