@@ -12,6 +12,14 @@ def check_robustness(result: dict) -> dict:
 
     issues = []
 
+    if not isinstance(result, dict):
+        return {
+            "robust": False,
+            "status": "FAIL",
+            "recommendation": "REPLAN",
+            "issues": ["Result must be a dictionary."]
+        }
+
     actual = result.get("actual", {})
 
     # Supplier failure

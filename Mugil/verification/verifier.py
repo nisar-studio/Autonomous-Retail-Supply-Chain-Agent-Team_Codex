@@ -3,6 +3,18 @@ Verification layer for the Autonomous Retail Supply Chain Agent.
 
 Checks whether the execution result satisfies the requested
 business constraints.
+
+Units:
+    required_quantity -> units/items
+    deadline          -> hours
+    max_cost/budget   -> environment currency
+    carbon_limit      -> kg CO2e
+
+Actual values:
+    delivered_quantity -> units/items
+    delivery_time      -> hours
+    total_cost         -> environment currency
+    carbon_emission    -> kg CO2e
 """
 
 
@@ -17,6 +29,18 @@ def verify_result(result: dict) -> dict:
             "actual": {...}
         }
 
+    Expected constraints:
+        required_quantity -> units
+        deadline          -> hours
+        max_cost          -> environment currency
+        carbon_limit      -> kg CO2e
+
+    Actual values:
+        delivered_quantity -> units
+        delivery_time      -> hours
+        total_cost         -> environment currency
+        carbon_emission    -> kg CO2e
+
     Output:
         {
             "verified": bool,
@@ -29,6 +53,19 @@ def verify_result(result: dict) -> dict:
 
     errors = []
     checks = {}
+
+    # --------------------------------------------------
+    # Input validation
+    # --------------------------------------------------
+
+    if not isinstance(result, dict):
+        return {
+            "verified": False,
+            "status": "FAIL",
+            "recommendation": "REPLAN",
+            "checks": {},
+            "errors": ["Result must be a dictionary."]
+        }
 
     goal = result.get("goal", {})
     expected = result.get("expected", {})
@@ -67,6 +104,7 @@ def verify_result(result: dict) -> dict:
     # Deadline check
     # --------------------------------------------------
 
+    # Deadline and delivery_time are both measured in hours.
     if "deadline" in constraints:
         expected_deadline = constraints["deadline"]
         actual_delivery_time = actual.get("delivery_time")
@@ -82,16 +120,19 @@ def verify_result(result: dict) -> dict:
             if not checks["deadline_met"]:
                 errors.append(
                     f"Delivery deadline missed. "
-                    f"Expected: {expected_deadline}, "
-                    f"actual: {actual_delivery_time}."
+                    f"Expected: {expected_deadline} hours, "
+                    f"actual: {actual_delivery_time} hours."
                 )
 
     # --------------------------------------------------
     # Budget check
     # --------------------------------------------------
 
-    # Support both "max_cost" and "budget"
-    max_cost = constraints.get("max_cost", constraints.get("budget"))
+    # Support both "max_cost" and "budget".
+    max_cost = constraints.get(
+        "max_cost",
+        constraints.get("budget")
+    )
 
     if max_cost is not None:
         actual_cost = actual.get("total_cost", 0)
@@ -105,6 +146,28 @@ def verify_result(result: dict) -> dict:
             )
 
     # --------------------------------------------------
+    # Carbon check
+    # --------------------------------------------------
+
+    # Carbon limit and carbon emission are measured in kg CO2e.
+    carbon_limit = constraints.get("carbon_limit")
+
+    if carbon_limit is not None:
+        actual_carbon = actual.get("carbon_emission")
+
+        if actual_carbon is None:
+            checks["carbon_met"] = False
+            errors.append("Actual carbon emission is missing.")
+        else:
+            checks["carbon_met"] = actual_carbon <= carbon_limit
+
+            if not checks["carbon_met"]:
+                errors.append(
+                    f"Carbon limit: {carbon_limit} kgCO2e, "
+                    f"actual emission: {actual_carbon} kgCO2e."
+                )
+
+    # --------------------------------------------------
     # Final verification
     # --------------------------------------------------
 
@@ -113,7 +176,9 @@ def verify_result(result: dict) -> dict:
     return {
         "verified": verified,
         "status": "PASS" if verified else "FAIL",
-        "recommendation": "CONTINUE" if verified else "REPLAN",
+        "recommendation": (
+            "CONTINUE" if verified else "REPLAN"
+        ),
         "checks": checks,
         "errors": errors,
     }
