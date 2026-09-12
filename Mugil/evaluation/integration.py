@@ -4,14 +4,25 @@ and the Mugil evaluation system.
 
 Flow:
 
-Pavan execution response
-        ↓
+Nisar SelectedAction
+        │
+        ├──────────────┐
+        ▼              ▼
+Execution        Mugil evaluation
+response              │
+        │              │
+        ▼              ▼
 adapt_execution_result()
-        ↓
+        │
+        ▼
 evaluate_result()
-        ↓
-Mugil evaluation result
+        │
+        ▼
+CONTINUE / REPLAN
 """
+
+from collections.abc import Sequence
+from typing import Any
 
 from Mugil.evaluation.execution_adapter import adapt_execution_result
 from Mugil.evaluation.evaluator import evaluate_result
@@ -19,23 +30,21 @@ from Mugil.evaluation.evaluator import evaluate_result
 
 def evaluate_execution(
     execution_response: dict,
-    goal: dict,
-    expected: dict | None = None
+    goal: Any,
+    expected: dict | None = None,
+    selected_action: Any = None,
+    excluded_action_ids: Sequence[str] | None = None,
 ) -> dict:
     """
     Convert an execution response into the Mugil format
     and evaluate it.
 
-    Parameters:
-        execution_response:
-            Response returned by the execution environment.
+    selected_action:
+        Optional action selected by Nisar. When provided,
+        Mugil validates that action against the recovery goal.
 
-        goal:
-            Original recovery goal/constraints.
-
-        expected:
-            Optional expected constraints. If provided,
-            these take priority during evaluation.
+    excluded_action_ids:
+        Optional action IDs that must not be accepted.
 
     Returns:
         Complete Mugil evaluation result.
@@ -44,7 +53,12 @@ def evaluate_execution(
     adapted_result = adapt_execution_result(
         execution_response,
         goal,
-        expected
+        expected,
     )
 
-    return evaluate_result(adapted_result)
+    return evaluate_result(
+        adapted_result,
+        action=selected_action,
+        goal=goal if selected_action is not None else None,
+        excluded_action_ids=excluded_action_ids,
+    )
