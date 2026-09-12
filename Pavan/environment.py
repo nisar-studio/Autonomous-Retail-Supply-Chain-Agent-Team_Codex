@@ -1,11 +1,21 @@
 class Environment:
     """
-    Simulated environment for executing actions that change system state.
+    Simulated environment for executing supply-chain actions.
 
-    Supports:
+    Supported actions:
     - Purchase
     - Transfer
     - Reroute / Allocation
+
+    The environment also produces simulated evaluation metrics:
+    - delivered_quantity
+    - delivery_time (hours)
+    - total_cost
+    - carbon_emission (kg CO2e)
+
+    Note:
+    The metric values are deterministic simulation values for the
+    hackathon environment, not real-world logistics calculations.
     """
 
     def __init__(self):
@@ -18,19 +28,62 @@ class Environment:
 
         self.history = []
 
+    def _execution_metrics(self, action, quantity):
+        """
+        Generate deterministic simulated execution metrics.
+
+        These values are used by the evaluation layer.
+        """
+
+        if action == "purchase":
+            return {
+                "delivered_quantity": quantity,
+                "delivery_time": 24.0,
+                "total_cost": float(quantity * 100),
+                "carbon_emission": float(quantity * 0.5),
+            }
+
+        if action == "transfer":
+            return {
+                "delivered_quantity": quantity,
+                "delivery_time": 4.0,
+                "total_cost": float(quantity * 20),
+                "carbon_emission": float(quantity * 0.2),
+            }
+
+        if action == "reroute":
+            return {
+                "delivered_quantity": quantity,
+                "delivery_time": 6.0,
+                "total_cost": float(quantity * 30),
+                "carbon_emission": float(quantity * 0.3),
+            }
+
+        return {
+            "delivered_quantity": 0,
+            "delivery_time": 0.0,
+            "total_cost": 0.0,
+            "carbon_emission": 0.0,
+        }
+
     def purchase(self, item, quantity, location):
-        """Purchase items and add them to a location."""
+        """
+        Purchase inventory and add it to a location.
+        """
 
         if quantity <= 0:
-            return self._failure("Quantity must be greater than 0.")
+            return self._failure(
+                "Quantity must be greater than 0."
+            )
 
         current_quantity = self.state["inventory"].get(
-            (item, location), 0
+            (item, location),
+            0
         )
 
-        self.state["inventory"][(item, location)] = (
-            current_quantity + quantity
-        )
+        self.state["inventory"][
+            (item, location)
+        ] = current_quantity + quantity
 
         result = {
             "action": "purchase",
@@ -38,32 +91,56 @@ class Environment:
             "item": item,
             "quantity": quantity,
             "location": location,
+            **self._execution_metrics(
+                "purchase",
+                quantity
+            ),
         }
 
         self.history.append(result)
+
         return result
 
-    def transfer(self, item, quantity, source, destination):
-        """Transfer items from one location to another."""
+    def transfer(
+        self,
+        item,
+        quantity,
+        source,
+        destination
+    ):
+        """
+        Transfer inventory from one location to another.
+        """
 
         if quantity <= 0:
-            return self._failure("Quantity must be greater than 0.")
+            return self._failure(
+                "Quantity must be greater than 0."
+            )
 
         source_key = (item, source)
         destination_key = (item, destination)
 
-        available = self.state["inventory"].get(source_key, 0)
+        available = self.state["inventory"].get(
+            source_key,
+            0
+        )
 
         if available < quantity:
             return self._failure(
                 f"Not enough {item} at {source}. "
-                f"Available: {available}, requested: {quantity}."
+                f"Available: {available}, "
+                f"requested: {quantity}."
             )
 
-        self.state["inventory"][source_key] = available - quantity
+        # Remove inventory from source
+        self.state["inventory"][source_key] = (
+            available - quantity
+        )
 
+        # Add inventory to destination
         destination_quantity = self.state["inventory"].get(
-            destination_key, 0
+            destination_key,
+            0
         )
 
         self.state["inventory"][destination_key] = (
@@ -77,33 +154,87 @@ class Environment:
             "quantity": quantity,
             "source": source,
             "destination": destination,
+            **self._execution_metrics(
+                "transfer",
+                quantity
+            ),
         }
 
         self.history.append(result)
+
         return result
 
-    def reroute(self, item, quantity, from_location, to_location):
+    def reroute(
+        self,
+        item,
+        quantity,
+        from_location,
+        to_location
+    ):
         """
-        Reroute inventory.
+        Reroute inventory from one location to another.
 
-        This is implemented using the transfer operation so that
-        state changes remain consistent.
+        This performs the same inventory movement as transfer,
+        but reports the action as 'reroute' and uses reroute
+        evaluation metrics.
         """
 
-        result = self.transfer(
-            item,
-            quantity,
-            from_location,
-            to_location,
+        if quantity <= 0:
+            return self._failure(
+                "Quantity must be greater than 0."
+            )
+
+        source_key = (item, from_location)
+        destination_key = (item, to_location)
+
+        available = self.state["inventory"].get(
+            source_key,
+            0
         )
 
-        if result["status"] == "success":
-            result["action"] = "reroute"
+        if available < quantity:
+            return self._failure(
+                f"Not enough {item} at {from_location}. "
+                f"Available: {available}, "
+                f"requested: {quantity}."
+            )
+
+        # Remove inventory from source
+        self.state["inventory"][source_key] = (
+            available - quantity
+        )
+
+        # Add inventory to destination
+        destination_quantity = self.state["inventory"].get(
+            destination_key,
+            0
+        )
+
+        self.state["inventory"][destination_key] = (
+            destination_quantity + quantity
+        )
+
+        result = {
+            "action": "reroute",
+            "status": "success",
+            "item": item,
+            "quantity": quantity,
+            "source": from_location,
+            "destination": to_location,
+            **self._execution_metrics(
+                "reroute",
+                quantity
+            ),
+        }
+
+        self.history.append(result)
 
         return result
 
     def get_state(self):
-        """Return a snapshot of the current environment state."""
+        """
+        Return the current environment state.
+        """
 
         return {
             "inventory": self.state["inventory"].copy(),
@@ -113,11 +244,16 @@ class Environment:
         }
 
     def get_history(self):
-        """Return the list of actions executed so far."""
+        """
+        Return a copy of the execution history.
+        """
+
         return self.history.copy()
 
     def _failure(self, message):
-        """Create a standard failure result."""
+        """
+        Create and record a failed execution result.
+        """
 
         result = {
             "status": "failure",
@@ -125,4 +261,5 @@ class Environment:
         }
 
         self.history.append(result)
+
         return result
