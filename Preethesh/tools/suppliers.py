@@ -23,6 +23,15 @@ class SupplierTool(ToolInterface):
         if operation == "add":
             return self.add_supplier(kwargs["supplier"])
 
+        if operation == "get_available_vendors":
+            return self.get_available_vendors()
+
+        if operation == "get_vendor_capacity":
+            return self.get_vendor_capacity(kwargs["supplier_id"])
+
+        if operation == "get_vendor_status":
+            return self.get_vendor_status(kwargs["supplier_id"])
+
         raise ValueError(f"Unknown supplier operation: {operation}")
 
     def add_supplier(self, supplier: Supplier) -> Supplier:
@@ -37,3 +46,29 @@ class SupplierTool(ToolInterface):
     def get_all_suppliers(self) -> list[Supplier]:
         """Return all suppliers."""
         return list(self._suppliers.values())
+
+    def get_available_vendors(self) -> list[Supplier]:
+        """Return suppliers currently available and able to supply."""
+        return [
+            supplier
+            for supplier in self._suppliers.values()
+            if supplier.status == "available" and supplier.capacity > 0
+        ]
+
+    def get_vendor_capacity(self, supplier_id: str) -> int:
+        """Return the available capacity of a supplier."""
+        supplier = self._suppliers.get(supplier_id)
+
+        if supplier is None:
+            raise KeyError(f"Supplier '{supplier_id}' not found.")
+
+        return supplier.capacity
+
+    def get_vendor_status(self, supplier_id: str) -> str:
+        """Return the current status of a supplier."""
+        supplier = self._suppliers.get(supplier_id)
+
+        if supplier is None:
+            raise KeyError(f"Supplier '{supplier_id}' not found.")
+
+        return supplier.status
