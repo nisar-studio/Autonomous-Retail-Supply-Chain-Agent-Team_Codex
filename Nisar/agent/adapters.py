@@ -233,17 +233,21 @@ def normalize_mugil_result(result: Mapping[str, object], action_id: str) -> Veri
     verified = result.get("verified")
     if not isinstance(verified, bool):
         raise ActionConversionError("Mugil result requires boolean verified")
+    status = _required_text(result, "status")
+    if status not in {"PASS", "FAIL"}:
+        raise ActionConversionError("Mugil status must be PASS or FAIL")
     recommendation = _required_text(result, "recommendation")
     if recommendation not in {"CONTINUE", "REPLAN"}:
         raise ActionConversionError("Mugil recommendation must be CONTINUE or REPLAN")
     errors = result.get("errors", ())
     if not isinstance(errors, list) or not all(isinstance(error, str) for error in errors):
         raise ActionConversionError("Mugil errors must be a list of strings")
-    details = "; ".join(errors) or _required_text(result, "status")
+    succeeded = verified and status == "PASS" and recommendation == "CONTINUE"
+    details = "; ".join(errors) or status
     return VerificationResult(
-        succeeded=verified,
+        succeeded=succeeded,
         details=details,
-        requires_replan=recommendation == "REPLAN",
+        requires_replan=not succeeded,
         action_id=action_id,
     )
 

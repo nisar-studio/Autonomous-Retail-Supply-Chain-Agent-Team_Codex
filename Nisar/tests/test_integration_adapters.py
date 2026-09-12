@@ -120,10 +120,18 @@ class ResultNormalizationTests(unittest.TestCase):
         self.assertFalse(result.requires_replan)
         self.assertEqual(result.action_id, "A009")
 
-    def test_mugil_replan_requires_replan(self):
+    def test_mugil_fail_replan_overrides_verified_true(self):
+        result = normalize_mugil_result({
+            "verified": True, "status": "FAIL", "recommendation": "REPLAN", "errors": [],
+        }, "A010")
+        self.assertFalse(result.succeeded)
+        self.assertTrue(result.requires_replan)
+        self.assertEqual(result.details, "FAIL")
+
+    def test_mugil_normal_verification_failure_requires_replan(self):
         result = normalize_mugil_result({
             "verified": False, "status": "FAIL", "recommendation": "REPLAN", "errors": ["Quantity unmet"],
-        }, "A010")
+        }, "A011")
         self.assertFalse(result.succeeded)
         self.assertTrue(result.requires_replan)
         self.assertEqual(result.details, "Quantity unmet")
