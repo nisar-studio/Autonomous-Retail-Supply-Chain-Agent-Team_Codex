@@ -22,7 +22,11 @@ def evaluate_result(result: dict) -> dict:
     robustness = check_robustness(result)
 
     # Preserve action_id for the controller/replanning layer.
-    action_id = result.get("action_id") if isinstance(result, dict) else None
+    action_id = (
+        result.get("action_id")
+        if isinstance(result, dict)
+        else None
+    )
 
     # Overall decision
     if not verification["verified"]:
@@ -41,7 +45,10 @@ def evaluate_result(result: dict) -> dict:
             else "FAIL"
         ),
         "recommendation": recommendation,
-        "score": verification_score(verification, robustness),
+        "score": verification_score(
+            verification,
+            robustness
+        ),
         "checks": verification["checks"],
         "metrics": metrics,
         "robustness": robustness,
@@ -59,14 +66,18 @@ def verification_score(
 
     if checks:
         passed = sum(
-            1 for value in checks.values()
+            1
+            for value in checks.values()
             if value is True
         )
+
         verification_score_value = passed / len(checks)
     else:
         verification_score_value = 0.0
 
-    robustness_score = 1.0 if robustness["robust"] else 0.0
+    robustness_score = (
+        1.0 if robustness["robust"] else 0.0
+    )
 
     return round(
         (verification_score_value + robustness_score) / 2,

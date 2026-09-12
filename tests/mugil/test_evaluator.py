@@ -154,3 +154,37 @@ def test_evaluation_preserves_action_id():
     output = evaluate_result(result)
 
     assert output["action_id"] == "A001"
+
+def test_metrics_track_recovery_information():
+    result = {
+        "action_id": "A002",
+        "goal": {
+            "required_quantity": 100,
+            "deadline": 4,
+            "budget": 15000,
+            "carbon_limit": 50
+        },
+        "actual": {
+            "delivered_quantity": 100,
+            "delivery_time": 2.5,
+            "total_cost": 5000,
+            "carbon_emission": 12.4
+        },
+        "recovery_attempts": 2,
+        "recovery_successes": 2,
+        "replan_count": 1,
+        "recovery_cost": 500,
+        "recovery_time": 1.5
+    }
+
+    output = evaluate_result(result)
+
+    metrics = output["metrics"]
+
+    assert metrics["recovery_success_rate"] == 1.0
+    assert metrics["replan_count"] == 1
+    assert metrics["recovery_cost"] == 500
+    assert metrics["recovery_time"] == 1.5
+    assert metrics["carbon_emission"] == 12.4
+    assert metrics["constraint_violations"] == []
+    assert metrics["constraint_violation_count"] == 0
