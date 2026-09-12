@@ -93,9 +93,14 @@ class RecoveryPlan:
 
 @dataclass(frozen=True)
 class SelectedAction:
+    """A selected Preethesh action with Nisar's existing trace fields."""
+
     action_id: str
-    action_type: str
-    description: str
+    action_type: str = ""
+    description: str = ""
+    tool: str = ""
+    operation: str = ""
+    parameters: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -103,7 +108,8 @@ class ExecutionResult:
     succeeded: bool
     details: str
     updated_state: Optional[CurrentState] = None
-    action_unavailable: bool = False
+    action_unavailable: Optional[bool] = None
+    action_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +117,7 @@ class VerificationResult:
     succeeded: bool
     details: str
     requires_replan: bool = False
+    action_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
