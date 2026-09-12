@@ -32,6 +32,16 @@ class ActionAdapter:
                     "destination": parameters["destination"],
                 },
             }
+        if operation == "allocate":
+            return {
+            "action_id": selected_action["action_id"],
+            "action": "allocation",
+            "params": {
+                "item": parameters["item_id"],
+                "quantity": parameters["quantity"],
+                "location": parameters["location"],
+            },
+        }
 
         if operation == "reroute":
             return {
