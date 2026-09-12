@@ -104,13 +104,44 @@ class ResultNormalizationTests(unittest.TestCase):
         self.assertIsNone(result.action_unavailable)
 
     def test_actual_pavan_step_result_normalizes(self):
-        result = normalize_pavan_execution_result({
+        pavan_response = {
             "action_id": "A008B", "action": "purchase", "status": "success",
-            "result": {"action": "purchase", "status": "success"}, "state": {},
-        })
+            "result": {
+                "action": "purchase", "status": "success", "item": "laptop",
+                "quantity": 3, "location": "warehouse",
+            },
+            "state": {"inventory": {("laptop", "warehouse"): 3}},
+        }
+        result = normalize_pavan_execution_result(pavan_response)
         self.assertTrue(result.succeeded)
         self.assertEqual(result.details, "success")
         self.assertEqual(result.action_id, "A008B")
+        self.assertEqual(result.execution_evidence, pavan_response)
+        self.assertEqual(result.execution_evidence["result"]["quantity"], 3)
+        self.assertEqual(result.execution_evidence["result"]["location"], "warehouse")
+        self.assertEqual(result.execution_evidence["state"], pavan_response["state"])
+        self.assertNotIn("delivered_quantity", result.execution_evidence["result"])
+        self.assertNotIn("delivery_time", result.execution_evidence["result"])
+        self.assertNotIn("total_cost", result.execution_evidence["result"])
+        self.assertNotIn("carbon_emission", result.execution_evidence["result"])
+
+    def test_pavan_transfer_and_reroute_evidence_preserves_locations(self):
+        for action in ("transfer", "reroute"):
+            pavan_response = {
+                "action_id": f"A008-{action}", "action": action,
+                "status": "success",
+                "result": {
+                    "action": action, "status": "success", "item": "laptop",
+                    "quantity": 2, "source": "warehouse", "destination": "store",
+                },
+                "state": {"inventory": {("laptop", "store"): 2}},
+            }
+
+            result = normalize_pavan_execution_result(pavan_response)
+
+            self.assertEqual(result.execution_evidence, pavan_response)
+            self.assertEqual(result.execution_evidence["result"]["source"], "warehouse")
+            self.assertEqual(result.execution_evidence["result"]["destination"], "store")
 
     def test_mugil_continue_does_not_require_replan(self):
         result = normalize_mugil_result({

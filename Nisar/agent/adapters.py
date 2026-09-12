@@ -102,11 +102,13 @@ def to_pavan_action(action: SelectedAction) -> PavanActionRequest:
 
 
 def normalize_pavan_execution_result(result: Mapping[str, object]) -> ExecutionResult:
-    """Normalize Pavan's standardized execution result without inventing state.
+    """Normalize Pavan's response and retain its raw evidence without inventing state.
 
     Pavan's location-keyed inventory state lacks Nisar's required quantities,
     shipments, demand, and snapshot identifier. It is therefore deliberately
-    represented as ``None`` rather than fabricated as ``CurrentState``.
+    not converted to ``CurrentState``. The actual Pavan response, including
+    its nested ``result`` and ``state`` when present, remains available to a
+    future Mugil request builder through ``execution_evidence``.
     """
     success = result.get("success")
     if success is None:
@@ -135,6 +137,7 @@ def normalize_pavan_execution_result(result: Mapping[str, object]) -> ExecutionR
         updated_state=None,
         action_unavailable=None,
         action_id=action_id,
+        execution_evidence=dict(result),
     )
 
 

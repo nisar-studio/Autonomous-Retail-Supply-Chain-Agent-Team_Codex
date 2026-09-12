@@ -111,6 +111,7 @@ class ExecutionResult:
     updated_state: Optional[CurrentState] = None
     action_unavailable: Optional[bool] = None
     action_id: Optional[str] = None
+    execution_evidence: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
