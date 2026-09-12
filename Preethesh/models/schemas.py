@@ -5,7 +5,6 @@ from typing import Optional
 @dataclass
 class InventoryItem:
     """Represents an inventory item."""
-
     item_id: str
     name: str
     quantity: int
@@ -16,16 +15,16 @@ class InventoryItem:
 @dataclass
 class Supplier:
     """Represents a supplier."""
-
     supplier_id: str
     name: str
     contact: Optional[str] = None
+    capacity: int = 0
+    status: str = "available"
 
 
 @dataclass
 class Order:
     """Represents an order."""
-
     order_id: str
     item_id: str
     quantity: int
