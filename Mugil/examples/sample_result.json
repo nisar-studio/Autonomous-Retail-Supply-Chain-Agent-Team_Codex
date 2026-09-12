@@ -1,0 +1,21 @@
+{
+    "goal": {
+        "description": "Restock 100 units before the deadline within budget"
+    },
+    "expected": {
+        "required_quantity": 100,
+        "deadline": "2026-09-15T18:00:00",
+        "max_cost": 15000
+    },
+    "actual": {
+        "delivered_quantity": 100,
+        "delivery_time": "2026-09-15T16:30:00",
+        "total_cost": 12500,
+        "carbon_emission": 42,
+        "supplier_available": true,
+        "shipment_delayed": false,
+        "inventory_available": true,
+        "tool_error": false,
+        "feasible": true
+    }
+}
