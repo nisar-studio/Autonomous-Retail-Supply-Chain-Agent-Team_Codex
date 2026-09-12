@@ -3,6 +3,106 @@ Performance and recovery metrics for the
 Autonomous Retail Supply Chain Agent.
 """
 
+from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
+
+
+CONSTRAINT_KEYS = {
+    "required_quantity",
+    "deadline",
+    "max_cost",
+    "budget",
+    "carbon_limit",
+}
+
+
+def _get_constraints(
+    expected: Any,
+    goal: Any,
+) -> Mapping[str, Any]:
+    """
+    Extract constraints from expected data or goal.
+
+    Supports:
+    1. Flat expected dictionaries.
+    2. Dictionary goals with nested "constraints".
+    3. Nisar-style objects/dataclasses with .constraints.
+    4. Existing flat goal dictionaries for backward compatibility.
+    """
+
+    # Explicit expected constraints have priority.
+    if isinstance(expected, Mapping) and expected:
+        return expected
+
+    # Dictionary-style goal.
+    if isinstance(goal, Mapping):
+        nested_constraints = goal.get("constraints")
+
+        if isinstance(nested_constraints, Mapping):
+            return nested_constraints
+
+        # Backward compatibility with existing Mugil tests.
+        flat_constraints = {
+            key: goal[key]
+            for key in CONSTRAINT_KEYS
+            if key in goal
+        }
+
+        if flat_constraints:
+            return flat_constraints
+
+    # Nisar-style dataclass/object.
+    constraints = getattr(goal, "constraints", {})
+
+    if isinstance(constraints, Mapping):
+        return constraints
+
+    return {}
+
+
+def _is_number(value: Any) -> bool:
+    """Return True for numeric values, excluding booleans."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    )
+
+
+def _deadline_is_met(
+    deadline: Any,
+    delivery_time: Any,
+) -> bool | None:
+    """
+    Compare deadline and delivery time.
+
+    Supports:
+    - numeric hours
+    - ISO datetime strings
+
+    Returns:
+        True  -> deadline satisfied
+        False -> deadline violated
+        None  -> invalid/incompatible values
+    """
+
+    # Numeric deadlines represent hours.
+    if _is_number(deadline) and _is_number(delivery_time):
+        return delivery_time <= deadline
+
+    # ISO datetime deadlines.
+    if isinstance(deadline, str) and isinstance(delivery_time, str):
+        try:
+            deadline_dt = datetime.fromisoformat(deadline)
+            delivery_dt = datetime.fromisoformat(delivery_time)
+
+            return delivery_dt <= deadline_dt
+
+        except ValueError:
+            return None
+
+    return None
+
 
 def calculate_metrics(result: dict) -> dict:
     """
@@ -10,13 +110,13 @@ def calculate_metrics(result: dict) -> dict:
 
     Expected constraints:
         required_quantity -> units
-        deadline          -> hours
+        deadline          -> hours or ISO datetime
         max_cost/budget   -> environment currency
         carbon_limit      -> kg CO2e
 
     Actual values:
         delivered_quantity -> units
-        delivery_time      -> hours
+        delivery_time      -> hours or ISO datetime
         total_cost         -> environment currency
         carbon_emission    -> kg CO2e
 
@@ -29,7 +129,10 @@ def calculate_metrics(result: dict) -> dict:
         recovery_time
     """
 
+    # --------------------------------------------------
     # Handle invalid input safely
+    # --------------------------------------------------
+
     if not isinstance(result, dict):
         return {}
 
@@ -37,9 +140,13 @@ def calculate_metrics(result: dict) -> dict:
     goal = result.get("goal", {})
     actual = result.get("actual", {})
 
-    # Use expected constraints when available.
-    # Otherwise fall back to goal constraints.
-    constraints = expected if expected else goal
+    if not isinstance(actual, Mapping):
+        actual = {}
+
+    constraints = _get_constraints(
+        expected,
+        goal,
+    )
 
     metrics = {}
 
@@ -49,12 +156,16 @@ def calculate_metrics(result: dict) -> dict:
 
     if "required_quantity" in constraints:
         required = constraints["required_quantity"]
-        delivered = actual.get("delivered_quantity", 0)
+        delivered = actual.get("delivered_quantity")
 
-        if isinstance(required, (int, float)) and required > 0:
+        if (
+            _is_number(required)
+            and required > 0
+            and _is_number(delivered)
+        ):
             metrics["quantity_fulfillment_rate"] = round(
                 delivered / required,
-                2
+                2,
             )
         else:
             metrics["quantity_fulfillment_rate"] = 0.0
@@ -96,10 +207,14 @@ def calculate_metrics(result: dict) -> dict:
         attempts = result["recovery_attempts"]
         successes = result["recovery_successes"]
 
-        if attempts > 0:
+        if (
+            _is_number(attempts)
+            and _is_number(successes)
+            and attempts > 0
+        ):
             metrics["recovery_success_rate"] = round(
                 successes / attempts,
-                2
+                2,
             )
         else:
             metrics["recovery_success_rate"] = 0.0
@@ -136,47 +251,79 @@ def calculate_metrics(result: dict) -> dict:
 
     violations = []
 
+    # --------------------------------------------------
     # Quantity violation
+    # --------------------------------------------------
+
     if "required_quantity" in constraints:
         required = constraints["required_quantity"]
-        delivered = actual.get("delivered_quantity", 0)
+        delivered = actual.get("delivered_quantity")
 
-        if delivered < required:
+        if (
+            not _is_number(required)
+            or not _is_number(delivered)
+            or delivered < required
+        ):
             violations.append("quantity")
 
+    # --------------------------------------------------
     # Cost violation
+    # --------------------------------------------------
+
     max_cost = constraints.get(
         "max_cost",
-        constraints.get("budget")
+        constraints.get("budget"),
     )
 
     if max_cost is not None:
         actual_cost = actual.get("total_cost")
 
-        if actual_cost is not None and actual_cost > max_cost:
+        if (
+            not _is_number(max_cost)
+            or not _is_number(actual_cost)
+            or actual_cost > max_cost
+        ):
             violations.append("cost")
 
+    # --------------------------------------------------
     # Deadline violation
+    # --------------------------------------------------
+
     if "deadline" in constraints:
         deadline = constraints["deadline"]
         delivery_time = actual.get("delivery_time")
 
-        if (
-            delivery_time is not None
-            and delivery_time > deadline
-        ):
+        deadline_result = _deadline_is_met(
+            deadline,
+            delivery_time,
+        )
+
+        if deadline_result is not True:
             violations.append("deadline")
 
+    # --------------------------------------------------
     # Carbon violation
+    # --------------------------------------------------
+
     carbon_limit = constraints.get("carbon_limit")
 
     if carbon_limit is not None:
         carbon = actual.get("carbon_emission")
 
-        if carbon is not None and carbon > carbon_limit:
+        if (
+            not _is_number(carbon_limit)
+            or not _is_number(carbon)
+            or carbon > carbon_limit
+        ):
             violations.append("carbon")
 
+    # --------------------------------------------------
+    # Final metrics
+    # --------------------------------------------------
+
     metrics["constraint_violations"] = violations
-    metrics["constraint_violation_count"] = len(violations)
+    metrics["constraint_violation_count"] = len(
+        violations
+    )
 
     return metrics
