@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 
 class Environment:
@@ -130,8 +130,18 @@ class Environment:
         if not item:
             raise ValueError("item is required")
 
+        # Missing location must return a failure result
+        # instead of raising an exception.
         if not location:
-            raise ValueError("location is required")
+            result = {
+                "action": "purchase",
+                "status": "failure",
+                "error": "location is required",
+            }
+
+            self.history.append(result)
+
+            return result
 
         if quantity <= 0:
             result = {
@@ -200,11 +210,29 @@ class Environment:
         if not item:
             raise ValueError("item is required")
 
+        # Missing source must return a failure result.
         if not source:
-            raise ValueError("source is required")
+            result = {
+                "action": "transfer",
+                "status": "failure",
+                "error": "source is required",
+            }
 
+            self.history.append(result)
+
+            return result
+
+        # Missing destination must return a failure result.
         if not destination:
-            raise ValueError("destination is required")
+            result = {
+                "action": "transfer",
+                "status": "failure",
+                "error": "destination is required",
+            }
+
+            self.history.append(result)
+
+            return result
 
         if quantity <= 0:
             result = {
@@ -316,15 +344,29 @@ class Environment:
         if not item:
             raise ValueError("item is required")
 
+        # Missing source must return a failure result.
         if not source:
-            raise ValueError(
-                "source/from_location is required"
-            )
+            result = {
+                "action": "reroute",
+                "status": "failure",
+                "error": "source/from_location is required",
+            }
 
+            self.history.append(result)
+
+            return result
+
+        # Missing destination must return a failure result.
         if not destination:
-            raise ValueError(
-                "destination/to_location is required"
-            )
+            result = {
+                "action": "reroute",
+                "status": "failure",
+                "error": "destination/to_location is required",
+            }
+
+            self.history.append(result)
+
+            return result
 
         if quantity <= 0:
             result = {
