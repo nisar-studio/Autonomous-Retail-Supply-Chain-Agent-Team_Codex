@@ -120,3 +120,26 @@ def test_action_id_is_preserved():
     result = ActionAdapter().adapt(selected_action)
 
     assert result["action_id"] == "A999"
+def test_allocation_action():
+    selected_action = {
+        "action_id": "A005",
+        "tool": "inventory",
+        "operation": "allocate",
+        "parameters": {
+            "item_id": "laptop",
+            "quantity": 2,
+            "location": "store",
+        },
+    }
+
+    result = ActionAdapter().adapt(selected_action)
+
+    assert result == {
+        "action_id": "A005",
+        "action": "allocation",
+        "params": {
+            "item": "laptop",
+            "quantity": 2,
+            "location": "store",
+        },
+    }
