@@ -4,6 +4,14 @@ Autonomous Retail Supply Chain Recovery Agent.
 
 Presentation layer connected to the real integrated recovery flow.
 """
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(ROOT_DIR / "Nisar"))
+sys.path.insert(0, str(ROOT_DIR / "Pavan"))
 
 import streamlit as st
 
