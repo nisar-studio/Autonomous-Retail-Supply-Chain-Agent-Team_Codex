@@ -3,17 +3,15 @@ from typing import Any, Dict, Tuple
 
 class Environment:
     """
-    Simulation environment for the autonomous retail supply-chain agent.
+    Simulated supply-chain environment.
 
     Supports:
     - Purchase
-    - Transfer
-    - Reroute
-    - Allocation
-    - Inventory management
-    - Item location tracking
+    - Inventory transfer
+    - Inventory reroute
+    - Inventory allocation
+    - Item location management
     - Execution history
-    - Controlled state changes
     """
 
     def __init__(self):
@@ -26,17 +24,17 @@ class Environment:
 
         self.history = []
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # STATE
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current environment state."""
         return self.state
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # ITEM LOCATION
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def set_item_location(
         self,
@@ -48,6 +46,7 @@ class Environment:
 
         Both item and location are required.
         """
+
         if not item:
             raise ValueError("item is required")
 
@@ -66,15 +65,23 @@ class Environment:
         """Return the current location of an item."""
         return self.state["locations"].get(item)
 
-    # ------------------------------------------------------------------
-    # INVENTORY
-    # ------------------------------------------------------------------
+    def has_item_location(self, item: str) -> bool:
+        """Return True if the item has a stored location."""
+        return item in self.state["locations"]
+
+    def get_all_item_locations(self) -> Dict[str, str]:
+        """Return all item-to-location mappings."""
+        return dict(self.state["locations"])
+
+    # ============================================================
+    # INVENTORY HELPERS
+    # ============================================================
 
     def get_inventory(
         self,
         item: str,
         location: str
-    ) -> float:
+    ) -> int:
         """Return inventory quantity for an item at a location."""
         return self.state["inventory"].get(
             (item, location),
@@ -85,34 +92,35 @@ class Environment:
         self,
         item: str,
         location: str,
-        quantity: float
+        quantity: int
     ) -> None:
-        """Set inventory quantity for an item at a location."""
-        self.state["inventory"][(item, location)] = quantity
+        """Set inventory quantity."""
+        self.state["inventory"][
+            (item, location)
+        ] = quantity
 
     def add_inventory(
         self,
         item: str,
         location: str,
-        quantity: float
+        quantity: int
     ) -> None:
         """Add inventory quantity."""
-        current = self.get_inventory(item, location)
+        key = (item, location)
 
-        self.set_inventory(
-            item,
-            location,
-            current + quantity
+        self.state["inventory"][key] = (
+            self.state["inventory"].get(key, 0)
+            + quantity
         )
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # PURCHASE
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def purchase(
         self,
         item: str,
-        quantity: float,
+        quantity: int,
         location: str
     ) -> Dict[str, Any]:
         """
@@ -120,70 +128,68 @@ class Environment:
         """
 
         if not item:
-            result = {
-                "action": "purchase",
-                "status": "failure",
-                "error": "Item is required.",
-            }
-
-            self.history.append(result)
-            return result
+            raise ValueError("item is required")
 
         if not location:
-            result = {
-                "action": "purchase",
-                "status": "failure",
-                "error": "Location is required.",
-            }
-
-            self.history.append(result)
-            return result
+            raise ValueError("location is required")
 
         if quantity <= 0:
             result = {
                 "action": "purchase",
                 "status": "failure",
-                "error": "Quantity must be greater than zero.",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
             }
 
+            # Failed actions must also be recorded.
             self.history.append(result)
+
             return result
 
-        # Add purchased inventory
         self.add_inventory(
             item,
             location,
             quantity
         )
 
-        # Update latest operational location
-        self.state["locations"][item] = location
+        self.set_item_location(
+            item,
+            location
+        )
 
-        # Execution metrics
         result = {
             "action": "purchase",
             "status": "success",
             "item": item,
             "quantity": quantity,
             "location": location,
+
+            # Execution metrics
             "delivered_quantity": quantity,
             "delivery_time": 24.0,
-            "total_cost": round(100.0 * quantity, 2),
-            "carbon_emission": round(0.5 * quantity, 2),
+            "total_cost": round(
+                100.0 * quantity,
+                2
+            ),
+            "carbon_emission": round(
+                0.5 * quantity,
+                2
+            ),
         }
 
         self.history.append(result)
 
         return result
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # TRANSFER
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def transfer(
         self,
         item: str,
-        quantity: float,
+        quantity: int,
         source: str,
         destination: str
     ) -> Dict[str, Any]:
@@ -192,80 +198,66 @@ class Environment:
         """
 
         if not item:
-            result = {
-                "action": "transfer",
-                "status": "failure",
-                "error": "Item is required.",
-            }
+            raise ValueError("item is required")
 
-            self.history.append(result)
-            return result
+        if not source:
+            raise ValueError("source is required")
+
+        if not destination:
+            raise ValueError("destination is required")
 
         if quantity <= 0:
             result = {
                 "action": "transfer",
                 "status": "failure",
-                "error": "Quantity must be greater than zero.",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
-        if not source:
-            result = {
-                "action": "transfer",
-                "status": "failure",
-                "error": "Source location is required.",
-            }
+        source_key = (item, source)
+        destination_key = (item, destination)
 
-            self.history.append(result)
-            return result
-
-        if not destination:
-            result = {
-                "action": "transfer",
-                "status": "failure",
-                "error": "Destination location is required.",
-            }
-
-            self.history.append(result)
-            return result
-
-        available = self.get_inventory(
-            item,
-            source
+        available = self.state["inventory"].get(
+            source_key,
+            0
         )
 
         if available < quantity:
             result = {
                 "action": "transfer",
                 "status": "failure",
-                "error": "Insufficient inventory at source.",
-                "item": item,
-                "quantity": quantity,
-                "source": source,
-                "destination": destination,
+                "error": (
+                    f"Insufficient inventory at {source}."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
         # Remove from source
-        self.set_inventory(
-            item,
-            source,
+        self.state["inventory"][source_key] = (
             available - quantity
         )
 
         # Add to destination
-        self.add_inventory(
-            item,
-            destination,
-            quantity
+        self.state["inventory"][destination_key] = (
+            self.state["inventory"].get(
+                destination_key,
+                0
+            ) + quantity
         )
 
-        # Update latest operational location
-        self.state["locations"][item] = destination
+        # Update operational location
+        self.set_item_location(
+            item,
+            destination
+        )
 
         result = {
             "action": "transfer",
@@ -274,216 +266,211 @@ class Environment:
             "quantity": quantity,
             "source": source,
             "destination": destination,
+
+            # Execution metrics
             "delivered_quantity": quantity,
             "delivery_time": 4.0,
-            "total_cost": round(20.0 * quantity, 2),
-            "carbon_emission": round(0.2 * quantity, 2),
+            "total_cost": round(
+                20.0 * quantity,
+                2
+            ),
+            "carbon_emission": round(
+                0.2 * quantity,
+                2
+            ),
         }
 
         self.history.append(result)
 
         return result
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # REROUTE
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def reroute(
         self,
         item: str,
-        quantity: float,
-        source: str,
-        destination: str,
-        **kwargs
+        quantity: int,
+        source: str = None,
+        destination: str = None,
+        from_location: str = None,
+        to_location: str = None,
     ) -> Dict[str, Any]:
         """
-        Reroute inventory from one location to another.
+        Reroute inventory between locations.
 
-        Supports both:
-            source / destination
+        Supports both parameter naming conventions:
 
-        and:
-            from_location / to_location
+        source / destination
 
-        This keeps compatibility with the Executor / SelectedAction flow.
+        and
+
+        from_location / to_location
         """
 
-        # Compatibility with Executor's parameter names
-        if not source:
-            source = kwargs.get("from_location")
-
-        if not destination:
-            destination = kwargs.get("to_location")
+        # Compatibility with Pavan executor / SelectedAction
+        source = source or from_location
+        destination = destination or to_location
 
         if not item:
-            result = {
-                "action": "reroute",
-                "status": "failure",
-                "error": "Item is required.",
-            }
+            raise ValueError("item is required")
 
-            self.history.append(result)
-            return result
+        if not source:
+            raise ValueError(
+                "source/from_location is required"
+            )
+
+        if not destination:
+            raise ValueError(
+                "destination/to_location is required"
+            )
 
         if quantity <= 0:
             result = {
                 "action": "reroute",
                 "status": "failure",
-                "error": "Quantity must be greater than zero.",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
-        if not source:
-            result = {
-                "action": "reroute",
-                "status": "failure",
-                "error": "Source location is required.",
-            }
+        source_key = (item, source)
+        destination_key = (item, destination)
 
-            self.history.append(result)
-            return result
-
-        if not destination:
-            result = {
-                "action": "reroute",
-                "status": "failure",
-                "error": "Destination location is required.",
-            }
-
-            self.history.append(result)
-            return result
-
-        available = self.get_inventory(
-            item,
-            source
+        available = self.state["inventory"].get(
+            source_key,
+            0
         )
 
         if available < quantity:
             result = {
                 "action": "reroute",
                 "status": "failure",
-                "error": "Insufficient inventory at source.",
-                "item": item,
-                "quantity": quantity,
-                "source": source,
-                "destination": destination,
+                "error": (
+                    f"Insufficient inventory at {source}."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
         # Remove from source
-        self.set_inventory(
-            item,
-            source,
+        self.state["inventory"][source_key] = (
             available - quantity
         )
 
         # Add to destination
-        self.add_inventory(
-            item,
-            destination,
-            quantity
+        self.state["inventory"][destination_key] = (
+            self.state["inventory"].get(
+                destination_key,
+                0
+            ) + quantity
         )
 
-        # Update latest operational location
-        self.state["locations"][item] = destination
+        # Update operational location
+        self.set_item_location(
+            item,
+            destination
+        )
 
         result = {
             "action": "reroute",
             "status": "success",
             "item": item,
             "quantity": quantity,
+
+            # Keep both naming conventions in response
             "source": source,
             "destination": destination,
+            "from_location": source,
+            "to_location": destination,
+
+            # Execution metrics
             "delivered_quantity": quantity,
             "delivery_time": 6.0,
-            "total_cost": round(30.0 * quantity, 2),
-            "carbon_emission": round(0.3 * quantity, 2),
+            "total_cost": round(
+                30.0 * quantity,
+                2
+            ),
+            "carbon_emission": round(
+                0.3 * quantity,
+                2
+            ),
         }
 
         self.history.append(result)
 
         return result
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # ALLOCATION
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def allocate(
         self,
         item: str,
-        quantity: float,
+        quantity: int,
         location: str
     ) -> Dict[str, Any]:
         """
-        Reserve inventory for allocation.
+        Allocate/reserve inventory at a location.
 
-        Allocation does not remove the inventory.
-        It records the reserved quantity separately.
+        Allocation does not remove physical inventory.
+        It records the allocated quantity separately.
         """
 
         if not item:
-            result = {
-                "action": "allocation",
-                "status": "failure",
-                "error": "Item is required.",
-            }
+            raise ValueError("item is required")
 
-            self.history.append(result)
-            return result
+        if not location:
+            raise ValueError("location is required")
 
         if quantity <= 0:
             result = {
                 "action": "allocation",
                 "status": "failure",
-                "error": "Quantity must be greater than zero.",
+                "error": (
+                    "Quantity must be greater than zero."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
-        if not location:
-            result = {
-                "action": "allocation",
-                "status": "failure",
-                "error": "Location is required.",
-            }
+        key = (item, location)
 
-            self.history.append(result)
-            return result
-
-        available = self.get_inventory(
-            item,
-            location
+        available = self.state["inventory"].get(
+            key,
+            0
         )
 
         if available < quantity:
             result = {
                 "action": "allocation",
                 "status": "failure",
-                "error": "Insufficient inventory for allocation.",
-                "item": item,
-                "quantity": quantity,
-                "location": location,
+                "error": (
+                    f"Insufficient inventory at {location}."
+                ),
             }
 
             self.history.append(result)
+
             return result
 
-        key: Tuple[str, str] = (
-            item,
-            location
-        )
-
-        current_allocation = self.state[
-            "allocations"
-        ].get(key, 0)
-
+        # Allocation is tracked separately.
+        # Physical inventory remains unchanged.
         self.state["allocations"][key] = (
-            current_allocation + quantity
+            self.state["allocations"].get(
+                key,
+                0
+            ) + quantity
         )
 
         result = {
@@ -493,17 +480,18 @@ class Environment:
             "quantity": quantity,
             "location": location,
             "allocated_quantity": quantity,
-            "total_allocated": self.state["allocations"][key],
-
+            "total_allocated": (
+                self.state["allocations"][key]
+            ),
         }
 
         self.history.append(result)
 
         return result
 
-    # ------------------------------------------------------------------
+    # ============================================================
     # GENERIC ACTION EXECUTION
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def execute_action(
         self,
@@ -511,67 +499,57 @@ class Environment:
         params: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Execute an action using the environment.
-
-        Supported actions:
-        - purchase
-        - transfer
-        - reroute
-        - allocation
+        Execute an action using the common environment interface.
         """
 
         if action == "purchase":
             return self.purchase(
-                item=params.get("item"),
-                quantity=params.get("quantity", 0),
-                location=params.get("location"),
+                item=params["item"],
+                quantity=params["quantity"],
+                location=params["location"],
             )
 
         if action == "transfer":
             return self.transfer(
-                item=params.get("item"),
-                quantity=params.get("quantity", 0),
-                source=params.get("source"),
-                destination=params.get("destination"),
+                item=params["item"],
+                quantity=params["quantity"],
+                source=params["source"],
+                destination=params["destination"],
             )
 
         if action == "reroute":
             return self.reroute(
-                item=params.get("item"),
-                quantity=params.get("quantity", 0),
-                source=params.get(
-                    "source",
-                    params.get("from_location")
+                item=params["item"],
+                quantity=params["quantity"],
+                source=params.get("source"),
+                destination=params.get("destination"),
+                from_location=params.get(
+                    "from_location"
                 ),
-                destination=params.get(
-                    "destination",
-                    params.get("to_location")
+                to_location=params.get(
+                    "to_location"
                 ),
             )
 
         if action == "allocation":
             return self.allocate(
-                item=params.get("item"),
-                quantity=params.get("quantity", 0),
-                location=params.get("location"),
+                item=params["item"],
+                quantity=params["quantity"],
+                location=params["location"],
             )
 
-        result = {
+        return {
             "action": action,
             "status": "failure",
             "error": f"Unsupported action: {action}",
         }
 
-        self.history.append(result)
-
-        return result
-
-    # ------------------------------------------------------------------
+    # ============================================================
     # HISTORY
-    # ------------------------------------------------------------------
+    # ============================================================
 
     def get_history(self):
-        """Return all execution history."""
+        """Return execution history."""
         return self.history
 
     def clear_history(self) -> None:
